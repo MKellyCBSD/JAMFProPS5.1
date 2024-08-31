@@ -1,4 +1,40 @@
-﻿
+<#
+.SYNOPSIS
+JAMF Pro PS5.1
+
+.DESCRIPTION
+JAMF Pro PS5.1 is a  powershell Module for accessing and executing commands against the JAMF Pro API. 
+
+.EXAMPLE
+Connects to JAMF Pro API and via client credentials or user credentials to get an authentication token
+
+Connect-JAMF -User "$UserName" -Password "$Password" -Url "JAMF MDM URL" 
+
+.EXAMPLE
+Retrieves device info for modile device with id: 23
+
+Get-JAMFMobileDevice -Id 23
+
+.EXAMPLE
+Retrieves a list of all mobile device PreStage info
+ 
+Get-JAMFMobileDevicePreStage -All 
+
+.EXAMPLE
+Retrieves a list of all devices
+
+Get-JAMFMobileDevice -All
+
+.EXAMPLE
+Assigns a single serial number to mobile device prestage with id: 123
+
+Set-JAMFMobileDevicePreStage -SerialNumber "$SerialNumber" -PreStageId 123 -Add 
+
+.EXAMPLE
+Assigns a csv list of serial numbers to mobile device prestage with id: 123. CSV must have a column with a heading 'SerialNumbers'
+
+Set-JAMFMobileDevicePreStage  -SerialNumbersCSVPath "C:\CSV\serialnumbers.csv" -PreStageId 123 -Add 
+-#>
 Function Connect-JAMF {
 [CmdletBinding(DefaultParameterSetName = 'UserAuth')]
     param (
