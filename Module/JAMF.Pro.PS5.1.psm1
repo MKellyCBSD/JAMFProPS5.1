@@ -33,6 +33,10 @@ Set-JAMFMobileDevicePreStage -SerialNumber "$SerialNumber" -PreStageId 123 -Add
 .EXAMPLE
 Assigns a csv list of serial numbers to mobile device prestage with id: 123. CSV must have a column with a heading 'SerialNumbers'
 
+Generate-iPadBarcodeImage -SerialNumber DMPW999BJAMF  -BarcodeFontPath "ree3of9.ttf" -imageWidth 1536 -imageHeight 2048 -OutputPath "C:\Barcodes"
+
+Set-JAMFMobileDeviceWallpaper -WallpaperPath "C:\Barcodes\DMPW999BJAMF.png" -DeviceId $deviceid -WallpaperLocation both
+
 Set-JAMFMobileDevicePreStage  -SerialNumbersCSVPath "C:\CSV\serialnumbers.csv" -PreStageId 123 -Add 
 -#>
 Function Connect-JAMF {
@@ -95,7 +99,7 @@ Function Connect-JAMF {
     #if Credentials Provided get token via client credentials
     if($Clientid -and $ClientSecret){
 
-    $Headers = @{
+    $Header = @{
         "Content-Type" = "application/x-www-form-urlencoded"
     }
     $bodyContent = @{
@@ -184,6 +188,8 @@ Function Get-JAMFMobileDevice {
     param(
     [Parameter(Mandatory, ParameterSetName = 'SerialNumber', Position = 0)]
     [System.String]$SerialNumber,
+    [Parameter(Mandatory, ParameterSetName = 'WifiMacAddress', Position = 0)]
+    [System.String]$WifiMacAddress,
     [Parameter(Mandatory, ParameterSetName = 'Id')]
     [Int]$Id,
     [Parameter(Mandatory, ParameterSetName = 'DeviceName')]
@@ -228,6 +234,17 @@ Function Get-JAMFMobileDevice {
     $mobiledevice = Invoke-RestMethod @Parameters
     return $mobiledevice.mobile_device.general
     }
+    if($WifiMacAddress){
+    $Parameters = $null
+    $Parameters = @{
+        Method      = "GET"
+        Uri         = "$c085b1eadaa7452eb77bbfb4fc0444cd/JSSResource/mobiledevices/macaddress/$WifiMacAddress"
+        Headers     = $Header
+        ContentType = "application/json"
+    }
+    $mobiledevice = Invoke-RestMethod @Parameters
+    return $mobiledevice.mobile_device.general
+    }
       if($All){
     $Parameters = $null
     $Parameters = @{
@@ -239,6 +256,63 @@ Function Get-JAMFMobileDevice {
     $mobiledevice = Invoke-RestMethod @Parameters
     return $mobiledevice.mobile_devices.mobile_device
     }
+}
+
+Function Set-JAMFMobileDeviceWallpaper {
+[CmdletBinding(DefaultParameterSetName = 'All')]
+    param(
+    [System.String]$LockscreenPath,
+    [System.String]$WallpaperPath,
+    [Int]$DeviceId,
+    $WallpaperLocation = "Both"
+)
+    $Header = @{
+        Authorization = "Bearer $27617236caba41e1a6c0067886e2458b"
+    }
+     # Convert file path to Base64 if provided
+        if ($WallpaperPath -and (Test-Path $WallpaperPath)) {
+            Write-Host "Converting wallpaper to Base64..." -ForegroundColor Yellow
+            $WallpaperBase64 = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($WallpaperPath))
+            Write-Host "✓ Wallpaper converted successfully (Size: $([math]::Round($WallpaperBase64.Length / 1024, 2)) KB)" -ForegroundColor Green
+        } elseif ($WallpaperPath) {
+            throw "Wallpaper file not found: $WallpaperPath"
+        }
+                     # Set wallpaper location
+                switch ($WallpaperLocation) {
+                    "Both" { $wallpapersetting = 3 }
+                    "LockScreen" { $wallpapersetting = 2 }
+                    "HomeScreen" { $wallpapersetting = 1 }
+                    "Desktop" { $wallpapersetting = 1  } # For macOS
+                }
+                
+
+                # Create the Settings command XML for iOS wallpaper
+                [xml]$commandXml = "<mobile_device_command>
+	<general>
+		<command>Wallpaper</command>
+		<wallpaper_setting>$wallpapersetting</wallpaper_setting>
+    <wallpaper_content>$WallpaperBase64</wallpaper_content>
+	</general>
+	<mobile_devices>
+		<mobile_device>
+			<id>$DeviceId</id>
+		</mobile_device>
+	</mobile_devices>
+</mobile_device_command>
+"
+    if($deviceId){
+    $Parameters = $null
+    $Parameters = @{
+        Method      = "Post"
+        Uri         = "$c085b1eadaa7452eb77bbfb4fc0444cd/JSSResource/mobiledevicecommands/command/Wallpaper"
+        Headers     = $Header
+        Body        = $commandXml
+        ContentType = "application/json"
+    }
+    $mobiledevice = Invoke-RestMethod @Parameters
+    return $mobiledevice.mobile_device.general
+    }
+ 
 }
 
 Function Get-JAMFComputer {
@@ -358,6 +432,8 @@ Function Get-JAMFMobileDevicePreStage {
     param(
     [Parameter(Mandatory, ParameterSetName = 'Id')]
     [Int]$Id,
+    [Parameter(Mandatory, ParameterSetName = 'SerialNumber')]
+    [String]$SerialNumber,
     [Parameter(Mandatory, ParameterSetName = 'Scopes')]
     [Switch]$Scopes,
     [Parameter(Mandatory = $false, ParameterSetName = 'All')]
@@ -380,6 +456,20 @@ if($Id){
 
     return $Prestage
     }
+if($SerialNumber){
+ 
+    $Parameters = $null
+    $Parameters = @{
+        Method      = "GET"
+        Uri         = "$c085b1eadaa7452eb77bbfb4fc0444cd/api/v1/device-enrollments/1/devices"
+        Headers     = $Header
+        ContentType = "application/json"
+    }
+    #$SerialNumber = "DMPTPV7BHP9Y"
+    $SerialNumberResults = (Invoke-RestMethod @Parameters).results | Where-Object {$_.serialNumber -match $SerialNumber} 
+    return $SerialNumberResults
+    }
+
 if($Scopes){
  
     $Parameters = $null
@@ -1190,5 +1280,104 @@ Function Get-JAMFBuilding {
     return $JAMFBuilding.results | Sort-Object name
     }
     }
+
+Function Add-JAMFMobileDeviceToStaticGroup {
+[CmdletBinding(DefaultParameterSetName = 'SerialNumber')]
+    param(
+    [Parameter(Mandatory, ParameterSetName = 'GroupID', Position = 0)]
+    $MobileDeviceID,
+    [Parameter(Mandatory, ParameterSetName = 'GroupID')]
+    [Int]$GroupID
+    
+)
+    $Header = @{
+        Authorization = "Bearer $27617236caba41e1a6c0067886e2458b"
+    }
+
+# Build XML for adding mobile device to group
+   [xml]$MobileDeviceinfo = "<mobile_device_group>
+    <mobile_device_additions>
+        <mobile_device>
+            <id>$MobileDeviceID</id>
+        </mobile_device>
+    </mobile_device_additions>
+</mobile_device_group>"
+
+    if($GroupID){
+    $Parameters = $null
+    $Parameters = @{
+        Method      = "PUT"
+        Uri         = "$c085b1eadaa7452eb77bbfb4fc0444cd/JSSResource/mobiledevicegroups/id/$GroupID"
+        Headers     = $Header
+        Body        = $MobileDeviceinfo
+        ContentType = 'application/xml'
+    }
+    $mobiledevice = Invoke-RestMethod @Parameters
+    return $mobiledevice.mobile_device
+    }
+}
+
+function Generate-iPadBarcodeImage {
+ [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SerialNumber,
+        [Parameter(Mandatory = $true)]
+        [string]$BarcodeFontPath,
+        [Parameter(Mandatory = $true)]
+        [int]$imageWidth,
+        [Parameter(Mandatory = $true)]
+        [int]$imageHeight,
+        [Parameter(Mandatory = $true)]
+        $OutputPath
+    )
+$imagepath = join-path $outputPath "$serialNumber.png"
+# Load the System.Drawing and System.Drawing.Text assemblies
+[System.Reflection.Assembly]::LoadWithPartialName("System.Drawing") | Out-Null
+[System.Reflection.Assembly]::LoadWithPartialName("System.Drawing.Text") | Out-Null
+# Create a PrivateFontCollection object
+$privateFontCollection = New-Object System.Drawing.Text.PrivateFontCollection
+# Add the font file to the private collection
+$privateFontCollection.AddFontFile($BarcodeFontPath)
+# Get the FontFamily from the private collection
+# Assumes there's only one font family in the file; adjust if needed
+$fontFamily = $privateFontCollection.Families[0]
+# Set image dimensions (adjust as needed)
+# Create a new Bitmap object
+$bitmap = New-Object System.Drawing.Bitmap($imageWidth, $imageHeight)
+# Create a Graphics object from the bitmap
+$graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+# Set the background color to white
+$graphics.FillRectangle([System.Drawing.Brushes]::White, 0, 0, $imageWidth, $imageHeight)
+# Create a Font object with the loaded font family
+# You might need to adjust the font size based on your requirements
+$font = New-Object System.Drawing.Font($fontFamily, 100)
+# Create a SolidBrush for drawing the text
+$brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::Black)
+# Measure the text size to calculate center position
+$textSize = $graphics.MeasureString($serialNumber, $font)
+# Calculate center coordinates for barcode
+$x = ($imageWidth - $textSize.Width) / 2
+$y = ($imageHeight - $textSize.Height) / 2 - 30  # Moved up slightly to make room for Arial text below
+# Draw the serial number using the barcode font (centered)
+$graphics.DrawString($serialNumber, $font, $brush, $x, $y)
+
+# Add Arial font serial number below the barcode
+$arialFont = New-Object System.Drawing.Font("Arial", 80)  # Adjust size as needed
+$arialTextSize = $graphics.MeasureString($serialNumber, $arialFont)
+$arialX = ($imageWidth - $arialTextSize.Width) / 2
+$arialY = $y + $textSize.Height + 10  # Position below barcode with 10px padding
+$graphics.DrawString($serialNumber, $arialFont, $brush, $arialX, $arialY)
+
+# Save the image
+$bitmap.Save($imagepath, [System.Drawing.Imaging.ImageFormat]::Png)
+# Clean up resources
+$graphics.Dispose()
+$bitmap.Dispose()
+$font.Dispose()
+$arialFont.Dispose()  # Dispose the Arial font
+$privateFontCollection.Dispose() # Dispose the font collection
+return $imagepath
+}
 
 Export-ModuleMember -Function '*'
