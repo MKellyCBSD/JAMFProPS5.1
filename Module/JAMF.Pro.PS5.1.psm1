@@ -33,6 +33,10 @@ Set-JAMFMobileDevicePreStage -SerialNumber "$SerialNumber" -PreStageId 123 -Add
 .EXAMPLE
 Assigns a csv list of serial numbers to mobile device prestage with id: 123. CSV must have a column with a heading 'SerialNumbers'
 
+Generate-iPadBarcodeImage -SerialNumber DMPW999BJAMF  -BarcodeFontPath "ree3of9.ttf" -imageWidth 1536 -imageHeight 2048 -OutputPath "C:\Barcodes"
+
+Set-JAMFMobileDeviceWallpaper -WallpaperPath "C:\Barcodes\DMPW999BJAMF.png" -DeviceId $deviceid -WallpaperLocation both
+
 Set-JAMFMobileDevicePreStage  -SerialNumbersCSVPath "C:\CSV\serialnumbers.csv" -PreStageId 123 -Add 
 -#>
 Function Connect-JAMF {
@@ -1319,7 +1323,7 @@ function Generate-iPadBarcodeImage {
         [Parameter(Mandatory = $true)]
         [string]$SerialNumber,
         [Parameter(Mandatory = $true)]
-        [string]$FontPath,
+        [string]$BarcodeFontPath,
         [Parameter(Mandatory = $true)]
         [int]$imageWidth,
         [Parameter(Mandatory = $true)]
@@ -1334,7 +1338,7 @@ $imagepath = join-path $outputPath "$serialNumber.png"
 # Create a PrivateFontCollection object
 $privateFontCollection = New-Object System.Drawing.Text.PrivateFontCollection
 # Add the font file to the private collection
-$privateFontCollection.AddFontFile($fontPath)
+$privateFontCollection.AddFontFile($BarcodeFontPath)
 # Get the FontFamily from the private collection
 # Assumes there's only one font family in the file; adjust if needed
 $fontFamily = $privateFontCollection.Families[0]
